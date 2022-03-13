@@ -1,0 +1,45 @@
+开发日志：
+广播用户上线：
+1.主go程中，创建监听套接字，记得defer
+2.for循环监听客户端连接请求。Accept()函数
+3.有一个客户端连接，创建新go程处理客户端数据 HandlerConnet(conn)defer
+4.定义全局结构体类型 C，Name，Addr
+5.创建全局map，channel
+6.实现HandlerConnet，获取客户端IP+port——RemoteAddr().初始化新用户结构体信息。name==Addr
+7.创建实现管理go程，在accept()之前。
+8.实现Manager。初始化在线用户map。循环读取全局变量channel，如果无证据，阻塞。如果有证据，遍历在线用户map，将数据写到用户的C里
+9.将新用户添加到 在线用户map中。key==IP+port value=新用户结构体
+10.创建WriteMsgToClient go程，专门给当前用户写数据。——来源于用户自带的C中
+11.创建WriteMsgToClient(clnt,conn)。遍历自带的C，读数据，conn.Write到客户端
+12.HandlerConnet中，结束位置，组织用户上线信息写到全局channel——Manager的读就被激活（原来一直阻塞）
+13.HandlerConnet中，结束加for{；}
+
+广播用户消息：
+1.封装函数MakeMsg()来处理广播，用户消息
+2.HandlerConnet中，创建匿名go程，读取用户socket上发送来的聊天内容，写到全局channel
+3.for循环conn.Read n==0 err!=nil
+4.写给全局message——后续的事，原来广播用户上线模块 完成。
+
+查询在线用户：
+1.将读取到的用户消息msg结尾的“\n”去掉
+2.判断是否是“who”命令
+3.如果是，遍历在线用户列表，组织显示信息，写到socket中、
+4.如果不是，写给全局messge
+
+修改用户名：
+1.将读取到的用户消息msg判断是否包含“rename”
+2.提取”|“后面的字符串，存入到Client的Name成员中
+3.更新在线用户列表。onlineMap。Key——IP+prot
+4.提示用户更新完成。conn.Write
+
+用户退出：
+1.在用户成功登陆之后，创建监听用户退出的channel——isQuit
+2.当conn.Read==0，isQuit<-true
+3.在HandlerConnet结尾for中，添加select监听<-isQuit
+4.条件满足，将用户从在线列表移除。组织用户下线消息，写入message
+
+超时强T：
+1.在select中监听定时器。（time.After()）计时到达。将用户从在线列表移除。组织用户下线消息，写入message（广播）
+2.创建监听用户活跃的channel——hasData
+3.只要用户在执行聊天，改名，who、任意操作，都在hasdata中写数据
+4.在select中添加监听hasdata，条件满足，不做任何事情，目的是重置计时器
